@@ -55,6 +55,7 @@ modules.builtin
 #
 !.gitignore
 !.mailmap
+!.gitpod.yml
 
 #
 # Generated include files

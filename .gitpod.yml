@@ -1,0 +1,6 @@
+tasks:
+  - name: Docker
+    before: |
+      docker build -t build-kernel .
+    init: |
+      docker run -v $PWD:/linux build-kernel
