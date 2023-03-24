@@ -24,3 +24,9 @@ make dep
 make zImage
 ./mkkrnlimg arch/arm/zImage kernel.img
 ```
+
+## Docker
+```
+docker build -t build-kernel .
+docker run -v $PWD:/linux build-kernel
+```
