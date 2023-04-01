@@ -297,6 +297,42 @@ static int none_key = 0;
 static int err_key = 0;
 #endif
 
+static inline int is_rectanble(u8 kbd_code[4]) {
+	int row_index[2] = {-1, -1}, row_count[2] = {1};
+	int col_index[2] = {-1, -1}, col_count[2] = {1};
+	int tmp, i;
+
+	if ((kbd_code[0] ^ kbd_code[1] ^ kbd_code[2] ^ kbd_code[3]) != 0x80) {
+		/* not 4-keys */
+		return 0;
+	}
+	col_index[0] = kbd_code[0] & KP_EVCODE_COL_MASK;
+	row_index[0] = (kbd_code[0] & KP_EVCODE_ROW_MASK) >> KP_ROW_SHIFT;
+	for (i = 1; i < (TC3589x_KBDCODE3 - TC3589x_KBDCODE0 + 1); i++) {
+		/* column */
+		tmp = kbd_code[i] & KP_EVCODE_COL_MASK;
+		if (tmp == col_index[0]) {
+			col_count[0]++;
+		} else if (tmp != col_index[1]) {
+			col_index[1] = tmp;
+			col_count[1] = 1;
+		} else {
+			col_count[1]++;
+		}
+		/* row */
+		tmp = (kbd_code[i] & KP_EVCODE_ROW_MASK) >> KP_ROW_SHIFT;
+		if (tmp == row_index[0]) {
+			row_count[0]++;
+		} else if (tmp != row_index[1]) {
+			row_index[1] = tmp;
+			row_count[1] = 1;
+		} else {
+			row_count[1]++;
+		}
+	}
+	return col_count[0] == 2 && col_count[1] == 2 &&
+		row_count[0] == 2 && row_count[1] == 2;
+}
 
 /*
  * replacement of intterupt handler. (tc3598x-keypad.c Line 301)
@@ -309,6 +345,7 @@ static irqreturn_t tc3589x_keypad_irq(int irq, void *dev)
 	u8 code;
 	struct key_data *data;
 	u8 kbd_code[4];
+	int has_ghost = 0;
 
 	/* init event stat */
 	for(i = 0; i < KEY_SIZE; i++){
@@ -332,7 +369,17 @@ static irqreturn_t tc3589x_keypad_irq(int irq, void *dev)
 		kbd_code[i] = tc3589x_reg_read(tc3589x, TC3589x_KBDCODE0 + i);
 	}
 #endif	/* modified by SIE */
-	for(i = 0; i < (TC3589x_KBDCODE3 - TC3589x_KBDCODE0 + 1); i++){
+	/* Ghost keys occur more than 4 keys or a rectanble's vertex */
+	has_ghost = kbd_code[3] != TC35893_KEYCODE_FIFO_EMPTY &&
+		((kbd_code[3] & 0x80) || is_rectanble(kbd_code));
+	if (has_ghost) {
+		for(i = 0; i < KEY_SIZE; i++){
+			data = &key_buffer[i];
+			if(data && data->use)
+				key_data_change(data, data->code, KEY_NO_EVENT, true);
+		}
+	}
+	for(i = 0; i < (TC3589x_KBDCODE3 - TC3589x_KBDCODE0 + 1) && !has_ghost; i++){
 		if(kbd_code[i] == TC35893_KEYCODE_FIFO_EMPTY)
 			continue;
 		col_index = kbd_code[i] & KP_EVCODE_COL_MASK;
